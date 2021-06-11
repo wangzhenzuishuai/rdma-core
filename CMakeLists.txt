@@ -238,21 +238,26 @@ RDMA_AddOptCFlag(CMAKE_C_FLAGS HAVE_C_WNESTED_EXTERNS "-Wnested-externs")
 
 # At some point after 4.4 gcc fixed shadow to ignore function vs variable
 # conflicts
-RDMA_Check_C_Compiles(HAVE_C_WORKING_SHADOW "
+set(SAFE_CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
+  set(CMAKE_REQUIRED_FLAGS "-Wshadow")
+CHECK_C_SOURCE_COMPILES("
  #include <unistd.h>
  int main(int argc,const char *argv[]) { int access = 1; return access; }"
-  "-Wshadow")
+  HAVE_C_WORKING_SHADOW
+  FAIL_REGEX "warning")
 if (HAVE_C_WORKING_SHADOW)
   RDMA_AddOptCFlag(CMAKE_C_FLAGS HAVE_C_WORKING_SHADOW "-Wshadow")
 endif()
+set(CMAKE_REQUIRED_FLAGS "${SAFE_CMAKE_REQUIRED_FLAGS}")
 
 # At some point around 5.4 gcc fixed missing-field-initializers to ignore this
 # common idiom we use extensively. Since this is a useful warning for
 # developers try and leave it on if the compiler supports it.
-RDMA_Check_C_Compiles(HAVE_C_WORKING_MISSING_FIELD_INITIALIZERS "
+CHECK_C_SOURCE_COMPILES("
  struct foo { int a; int b; };
  int main(int argc,const char *argv[]) { struct foo tmp = {}; return tmp.a; }"
-)
+  HAVE_C_WORKING_MISSING_FIELD_INITIALIZERS
+  FAIL_REGEX "warning")
 if (NOT HAVE_C_WORKING_MISSING_FIELD_INITIALIZERS)
   RDMA_AddOptCFlag(CMAKE_C_FLAGS HAVE_C_WNO_MISSING_FIELD_INITIALIZERS "-Wno-missing-field-initializers")
 endif()
@@ -268,7 +273,7 @@ set(NO_VAR_TRACKING_FLAGS "")
 RDMA_AddOptCFlag(NO_VAR_TRACKING_FLAGS HAVE_NO_VAR_TRACKING_ASSIGNMENTS
   "-fno-var-tracking-assignments")
 
-RDMA_Check_C_Compiles(HAVE_FUNC_ATTRIBUTE_IFUNC "
+CHECK_C_SOURCE_COMPILES("
  #include <unistd.h>
 
  void entry(void);
@@ -279,16 +284,18 @@ RDMA_Check_C_Compiles(HAVE_FUNC_ATTRIBUTE_IFUNC "
  static fn_t resolve_entry(void) {return &do_entry;}
 
  int main(int argc,const char *argv[]) { entry(); }"
-)
+  HAVE_FUNC_ATTRIBUTE_IFUNC
+  FAIL_REGEX "warning")
 
-RDMA_Check_C_Compiles(HAVE_FUNC_ATTRIBUTE_SYMVER "
+CHECK_C_SOURCE_COMPILES("
  #include <unistd.h>
 
  void _sym(void);
  __attribute__((__symver__(\"sym@TEST_1.1\"))) void _sym(void) {}
 
  int main(int argc,const char *argv[]) { _sym(); }"
-)
+  HAVE_FUNC_ATTRIBUTE_SYMVER
+  FAIL_REGEX "warning")
 
 # The code does not do the racy fcntl if the various CLOEXEC's are not
 # supported so it really doesn't work right if this isn't available. Thus hard
@@ -328,17 +335,19 @@ if (NOT HAS_CLOEXEC)
 endif()
 
 # always_inline is supported
-RDMA_Check_C_Compiles(HAVE_FUNC_ATTRIBUTE_ALWAYS_INLINE "
+CHECK_C_SOURCE_COMPILES("
  int foo(void);
  inline __attribute__((always_inline)) int foo(void) {return 0;}
  int main(int argc,const char *argv[]) { return foo(); }"
-)
+  HAVE_FUNC_ATTRIBUTE_ALWAYS_INLINE
+  FAIL_REGEX "warning")
 
 # Linux __u64 is an unsigned long long
-RDMA_Check_C_Compiles(HAVE_LONG_LONG_U64 "
+CHECK_C_SOURCE_COMPILES("
 #include <linux/types.h>
  int main(int argc,const char *argv[]) { __u64 tmp = 0; unsigned long long *tmp2 = &tmp; return *tmp2; }"
-)
+  HAVE_LONG_LONG_U64
+  FAIL_REGEX "warning")
 
 if (NOT HAVE_LONG_LONG_U64)
   # Modern Linux has switched to use ull in all cases, but to avoid disturbing
@@ -585,13 +594,17 @@ endif()
 # Old versions of libnl have a duplicated rtnl_route_put, disbale the warning on those
 # systems
 if (NOT NL_KIND EQUAL 0)
+  set(SAFE_CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES}")
   set(SAFE_CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
   set(CMAKE_REQUIRED_INCLUDES "${NL_INCLUDE_DIRS}")
-  RDMA_Check_C_Compiles(HAVE_C_WREDUNDANT_DECLS "
+  set(CMAKE_REQUIRED_FLAGS "-Wredundant-decls")
+  CHECK_C_SOURCE_COMPILES("
  #include <netlink/route/route.h>
  int main(int argc,const char *argv[]) { return 0; }"
-  "-Wredundant-decls")
+  HAVE_C_WREDUNDANT_DECLS
+  FAIL_REGEX "warning")
   set(CMAKE_REQUIRED_INCLUDES "${SAFE_CMAKE_REQUIRED_INCLUDES}")
+  set(CMAKE_REQUIRED_FLAGS "${SAFE_CMAKE_REQUIRED_FLAGS}")
 endif()
 RDMA_AddOptCFlag(CMAKE_C_FLAGS HAVE_C_WREDUNDANT_DECLS "-Wredundant-decls")
 

@@ -58,15 +58,9 @@ function(RDMA_EnableCStd)
   endif()
 endfunction()
 
-function(RDMA_Check_C_Compiles TO_VAR CHECK_PROGRAM)
-  set(CMAKE_REQUIRED_FLAGS "${ARGV2} -Werror")
-  CHECK_C_SOURCE_COMPILES("${CHECK_PROGRAM}" ${TO_VAR})
-  set(${TO_VAR} ${${TO_VAR}} PARENT_SCOPE)
-endfunction()
-
 function(RDMA_Check_Aliasing TO_VAR)
   SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2")
-  RDMA_Check_C_Compiles(HAVE_WORKING_STRICT_ALIASING "
+  CHECK_C_SOURCE_COMPILES("
 struct in6_addr {unsigned int u6_addr32[4];};
 struct iphdr {unsigned int daddr;};
 union ibv_gid {unsigned char raw[16];};
@@ -86,7 +80,8 @@ int main(int argc, char *argv[])
 	map_ipv4_addr_to_ipv6(&a);
 	return set_ah_attr_by_ipv4(&h);
 }"
-  )
+    HAVE_WORKING_STRICT_ALIASING
+    FAIL_REGEX "warning")
 
   set(${TO_VAR} "${HAVE_WORKING_STRICT_ALIASING}" PARENT_SCOPE)
 endfunction()
@@ -112,12 +107,20 @@ int main(int argc, char *argv[])
 #endif
 ")
 
-  RDMA_Check_C_Compiles(HAVE_TARGET_SSE "${SSE_CHECK_PROGRAM}")
+  CHECK_C_SOURCE_COMPILES(
+    "${SSE_CHECK_PROGRAM}"
+    HAVE_TARGET_SSE
+    FAIL_REGEX "warning")
 
   if(NOT HAVE_TARGET_SSE)
     # Older compiler, we can work around this by adding -msse instead of
     # relying on the function attribute.
-    RDMA_Check_C_Compiles(NEED_MSSE_FLAG "${SSE_CHECK_PROGRAM}" "-msse")
+    set(CMAKE_REQUIRED_FLAGS "-msse")
+    CHECK_C_SOURCE_COMPILES(
+      "${SSE_CHECK_PROGRAM}"
+      NEED_MSSE_FLAG
+      FAIL_REGEX "warning")
+    set(CMAKE_REQUIRED_FLAGS)
 
     if(NEED_MSSE_FLAG)
       set(SSE_FLAGS "-msse" PARENT_SCOPE)
